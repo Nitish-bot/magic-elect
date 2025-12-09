@@ -14,6 +14,9 @@ pub enum MagicElectionError {
   #[msg("Name of candidate in the election is more than 31 characters")]
   CandidateNameTooLong,
 
+  #[msg("No candidate found with provided name")]
+  NoCandidateFound,
+
   #[msg("Winner has already been declared")]
   WinnerDeclared,
 

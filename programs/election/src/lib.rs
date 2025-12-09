@@ -37,6 +37,7 @@ pub mod magice {
                 }
             })
             .collect();
+        election.id = counter.count;
         election.name = name;
         election.candidates = candidates;
         election.total_votes = 0;
@@ -47,19 +48,22 @@ pub mod magice {
         Ok(())
     }
 
-    pub fn cast_vote(ctx: Context<CastVote>, name: String, id: u32) -> Result<()> {
+    pub fn cast_vote(ctx: Context<CastVote>, name: String) -> Result<()> {
         let election = &mut ctx.accounts.election;
         
-        if let Some(candidate) = election.candidates
+        let candidate_pos = election.candidates
             .iter_mut()
-            .find(|candidate| candidate.name == name.to_lowercase()) {
-                candidate.votes += 1;
-            }
+            .position(|candidate| candidate.name == name.to_lowercase());
+            
+        require!(candidate_pos.is_some(), MagicElectionError::NoCandidateFound);
+                
+        election.candidates[candidate_pos.unwrap()].votes += 1;
+        election.total_votes += 1;
         
         Ok(())
     }
 
-    pub fn reveal(ctx: Context<RevealWinner>, id: u32) -> Result<()> {
+    pub fn reveal(ctx: Context<RevealWinner>) -> Result<()> {
         let election = &mut ctx.accounts.election;
 
         require!(election.winner.is_none(), MagicElectionError::WinnerDeclared);
@@ -102,12 +106,13 @@ pub struct CreateElection<'info> {
         space = 8 + Election::INIT_SPACE,
         seeds=[
             b"election",
-            counter.count.to_be_bytes().as_ref(),
+            organiser.key().as_ref(),
         ],
         bump,
     )]
     pub election: Account<'info, Election>,
     #[account(
+        mut,
         seeds = [ b"counter" ],
         bump,
     )]
@@ -116,29 +121,31 @@ pub struct CreateElection<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(id: u32)]
 pub struct CastVote<'info> {
     #[account(mut)]
     pub voter: Signer<'info>,
     #[account(
+        mut,
         seeds=[
             b"election",
-            id.to_be_bytes().as_ref(),
+            organiser.key().as_ref(),
         ],
         bump,
     )]
     pub election: Account<'info, Election>,
+    /// CHECK: needless
+    pub organiser: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
-#[instruction(id: u32)]
 pub struct RevealWinner<'info> {
     #[account(mut)]
     pub organiser: Signer<'info>,
     #[account(
+        mut,
         seeds=[
             b"election",
-            id.to_be_bytes().as_ref(),
+            organiser.key().as_ref(),
         ],
         bump,
     )]
