@@ -16,6 +16,6 @@ codegen-units = 1
 
 [workspace.dependencies]
 anchor-lang = "0.31.1"
-ephemeral-rollups-sdk = "0.6"
+ephemeral-rollups-sdk = { version = "0.6", features = ["anchor"] }
 magicblock-permission-client = { path = "crates/permission-client" }
-session-keys = { path = "crates/session-keys" }
+session-keys = { version = "3.0.10", features = ["no-entrypoint"] }

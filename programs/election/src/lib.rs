@@ -1,153 +1,180 @@
 #![allow(unexpected_cfgs, deprecated)]
 use anchor_lang::prelude::*;
+use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::cpi::DelegateConfig;
+use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
+use magicblock_permission_client::instructions::{
+    CreateGroupCpiBuilder, CreatePermissionCpiBuilder,
+};
 
-mod structs;
 mod errors;
+mod handlers;
+mod state;
 
-use structs::*;
-use errors::MagicElectionError;
+use handlers::*;
+use state::Election;
 
 declare_id!("54LBqwXyuyXR5BsvHsGqX2jwyhdUjujU2deiKiNEKjA");
 
+#[ephemeral]
 #[program]
 pub mod magice {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        ctx.accounts.election_counter.count = 1;
-        Ok(())
+        handlers::initialize(ctx)
     }
 
-    pub fn create_election(ctx: Context<CreateElection>, name: String, candidate_names: Vec<String>) -> Result<()> {
-        require!(name.len() <= 31, MagicElectionError::ElectionNameTooLong);
-        require!(candidate_names.len() <= 10, MagicElectionError::CandidateLimitExceeded);
-        
-        let candidate_names_correct_size = candidate_names.iter().all(|name| name.len() <= 31);
-        require!(candidate_names_correct_size, MagicElectionError::CandidateNameTooLong);
-
-        let election = &mut ctx.accounts.election;
-        let counter = &mut ctx.accounts.counter;
-
-        let candidates = candidate_names
-            .iter()
-            .map(|name| {
-                Candidate {
-                    name: name.to_string().to_lowercase(),
-                    votes: 0,
-                }
-            })
-            .collect();
-        election.id = counter.count;
-        election.name = name;
-        election.candidates = candidates;
-        election.total_votes = 0;
-        election.winner = None;
-        
-        counter.count = counter.count.checked_add(1).ok_or(MagicElectionError::CounterOverflow)?;
-        
-        Ok(())
+    pub fn create_election(
+        ctx: Context<CreateElection>,
+        name: String,
+        candidate_names: Vec<String>,
+    ) -> Result<()> {
+        handlers::create_election(ctx, name, candidate_names)
     }
 
     pub fn cast_vote(ctx: Context<CastVote>, name: String) -> Result<()> {
-        let election = &mut ctx.accounts.election;
-        
-        let candidate_pos = election.candidates
-            .iter_mut()
-            .position(|candidate| candidate.name == name.to_lowercase());
-            
-        require!(candidate_pos.is_some(), MagicElectionError::NoCandidateFound);
-                
-        election.candidates[candidate_pos.unwrap()].votes += 1;
-        election.total_votes += 1;
-        
-        Ok(())
+        handlers::cast_vote(ctx, name)
     }
 
     pub fn reveal(ctx: Context<RevealWinner>) -> Result<()> {
-        let election = &mut ctx.accounts.election;
+        handlers::reveal_winner(ctx)
+    }
 
-        require!(election.winner.is_none(), MagicElectionError::WinnerDeclared);
-        require!(election.total_votes > 0, MagicElectionError::ZeroVotes);
+    /// Creates a permission group and permission for a election account using the external permission program.
+    /// Calls out to the permission program to create a group and permission for the election account.
+    pub fn create_permission(ctx: Context<CreatePermission>, id: Pubkey) -> Result<()> {
+        let CreatePermission {
+            organiser,
+            permission,
+            permission_program,
+            group,
+            election,
+            system_program,
+        } = ctx.accounts;
 
-        let winner = election.candidates
-            .iter()
-            .max_by_key(|candidate| candidate.votes);
+        // Step 1: Create a permission group with the
+        // organiser so only the organiser has permission
+        CreateGroupCpiBuilder::new(&permission_program)
+            .group(&group)
+            .id(id)
+            .members(vec![organiser.key()])
+            .payer(&organiser)
+            .system_program(system_program)
+            .invoke()?;
 
-        require!(winner.is_some(), MagicElectionError::NoCandidates);
+        // Step 3: Delegate the election account to make it
+        // private then grant read/write permission to the group
+        // !MPORTANT : Signature by the seeds of the delegated pda
+        CreatePermissionCpiBuilder::new(&permission_program)
+            .permission(&permission)
+            .delegated_account(&election.to_account_info())
+            .group(&group)
+            .payer(&organiser)
+            .system_program(system_program)
+            .invoke_signed(&[&[organiser.key().as_ref(), &[ctx.bumps.election]]])?;
 
-        election.winner = winner.cloned();
+        Ok(())
+    }
+
+    // Delegates the election pda to the ER delegate program
+    pub fn delegate(ctx: Context<DelegateElection>) -> Result<()> {
+        let validator = ctx.accounts.validator.as_ref().map(|v| v.key());
+        ctx.accounts.delegate_election(
+            &ctx.accounts.organiser,
+            &[b"election", ctx.accounts.organiser.key().as_ref()],
+            DelegateConfig {
+                validator,
+                ..Default::default()
+            },
+        )?;
+
+        Ok(())
+    }
+
+    // Commit changes to base layer without undelegating
+    pub fn commit(ctx: Context<CommitElection>) -> Result<()> {
+        commit_accounts(
+            &ctx.accounts.organiser,
+            vec![&ctx.accounts.election.to_account_info()],
+            &ctx.accounts.magic_context,
+            &ctx.accounts.magic_program,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn undelegate(ctx: Context<UndelegateElection>) -> Result<()> {
+        commit_and_undelegate_accounts(
+            &ctx.accounts.organiser,
+            vec![&ctx.accounts.election.to_account_info()],
+            &ctx.accounts.magic_context,
+            &ctx.accounts.magic_program,
+        )?;
 
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(mut)]
-    pub program_owner: Signer<'info>,
-    #[account(
-        init,
-        payer = program_owner,
-        space = 8 + Counter::INIT_SPACE,
-        seeds = [ b"counter" ],
-        bump,
-    )]
-    pub election_counter: Account<'info, Counter>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct CreateElection<'info> {
+pub struct CreatePermission<'info> {
     #[account(mut)]
     pub organiser: Signer<'info>,
     #[account(
-        init,
-        payer = organiser,
-        space = 8 + Election::INIT_SPACE,
-        seeds=[
-            b"election",
-            organiser.key().as_ref(),
-        ],
-        bump,
+        seeds = [b"election", organiser.key().as_ref()],
+        bump
     )]
     pub election: Account<'info, Election>,
-    #[account(
-        mut,
-        seeds = [ b"counter" ],
-        bump,
-    )]
-    pub counter: Account<'info, Counter>,
+    /// CHECK: Checked by the permission program
+    #[account(mut)]
+    pub permission: UncheckedAccount<'info>,
+    /// CHECK: Checked by the permission program
+    #[account(mut)]
+    pub group: UncheckedAccount<'info>,
+    /// CHECK: Checked by the permission program
+    pub permission_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
+#[delegate]
 #[derive(Accounts)]
-pub struct CastVote<'info> {
+pub struct DelegateElection<'info> {
     #[account(mut)]
-    pub voter: Signer<'info>,
+    pub organiser: Signer<'info>,
+    /// CHECK: Checked by delegation program
+    pub validator: Option<UncheckedAccount<'info>>,
+    /// CHECK: The pda to delegate
     #[account(
         mut,
-        seeds=[
-            b"election",
-            organiser.key().as_ref(),
-        ],
-        bump,
+        del,
+        seeds = [b"election", organiser.key().as_ref()],
+        bump
     )]
     pub election: Account<'info, Election>,
-    /// CHECK: needless
-    pub organiser: UncheckedAccount<'info>,
 }
 
+#[commit]
 #[derive(Accounts)]
-pub struct RevealWinner<'info> {
+pub struct UndelegateElection<'info> {
     #[account(mut)]
     pub organiser: Signer<'info>,
     #[account(
         mut,
-        seeds=[
-            b"election",
-            organiser.key().as_ref(),
-        ],
-        bump,
+        seeds = [b"election", organiser.key().as_ref()],
+        bump
+    )]
+    pub election: Account<'info, Election>,
+}
+
+#[commit]
+#[derive(Accounts)]
+pub struct CommitElection<'info> {
+    #[account(mut)]
+    pub organiser: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"election", organiser.key().as_ref()],
+        bump
     )]
     pub election: Account<'info, Election>,
 }

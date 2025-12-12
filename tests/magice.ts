@@ -17,7 +17,7 @@ export const stringify = (object: any) => {
   return JSON.stringify(object, bigIntReplacer, 2);
 };
 
-describe("Election with no magic", () => {
+describe("Election with magic", () => {
   let alice: KeyPairSigner;
   let bob: KeyPairSigner;
   let charlie: KeyPairSigner;
