@@ -4,6 +4,8 @@ target
 **/*.rs.bk
 node_modules
 test-ledger
+test-ledger-magicblock
 .yarn
 node_modules
 client
+.env

@@ -14,7 +14,7 @@ mod state;
 use handlers::*;
 use state::Election;
 
-declare_id!("54LBqwXyuyXR5BsvHsGqX2jwyhdUjujU2deiKiNEKjA");
+declare_id!("6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs");
 
 #[ephemeral]
 #[program]
@@ -155,7 +155,7 @@ pub struct DelegateElection<'info> {
 
 #[commit]
 #[derive(Accounts)]
-pub struct UndelegateElection<'info> {
+pub struct CommitElection<'info> {
     #[account(mut)]
     pub organiser: Signer<'info>,
     #[account(
@@ -168,7 +168,7 @@ pub struct UndelegateElection<'info> {
 
 #[commit]
 #[derive(Accounts)]
-pub struct CommitElection<'info> {
+pub struct UndelegateElection<'info> {
     #[account(mut)]
     pub organiser: Signer<'info>,
     #[account(

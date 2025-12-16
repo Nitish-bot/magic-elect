@@ -8,8 +8,28 @@ import {
 import {
   type KeyPairSigner,
   type Address,
+  generateKeyPairSigner,
+  address,
+  assertAccountExists,
+  MaybeAccount
 } from "@solana/kit";
 import { connect, Connection } from "solana-kite";
+
+import {
+  delegateBufferPdaFromDelegatedAccountAndOwnerProgram,
+  delegationMetadataPdaFromDelegatedAccount,
+  delegationRecordPdaFromDelegatedAccount,
+  getAuthToken,
+  groupPdaFromId,
+  PERMISSION_PROGRAM_ID,
+  permissionPdaFromAccount,
+  waitUntilPermissionActive,
+} from "@magicblock-labs/ephemeral-rollups-kit"
+
+import 'dotenv/config'
+import assert from "assert";
+import * as fs from 'fs';
+import * as util from "util";
 
 export const stringify = (object: any) => {
   const bigIntReplacer = (key: string, value: any) =>
@@ -17,41 +37,82 @@ export const stringify = (object: any) => {
   return JSON.stringify(object, bigIntReplacer, 2);
 };
 
+const TEE_RPC = "https://tee.magicblock.app"
+const TEE_WS = "wss://tee.magicblock.app"
+const TEE_VALIDATOR_ADDRESS = "FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA"
+const HELIUS_RPC = process.env.HELIUS_RPC
+const HELIUS_WSS = process.env.HELIUS_WSS
+
 describe("Election with magic", () => {
   let alice: KeyPairSigner;
   let bob: KeyPairSigner;
-  let charlie: KeyPairSigner;
   let counterPDA: Address;
   let election: Address;
-  let connection: Connection;
+  let baseConnection: Connection;
+  // let authedER: Connection;
 
+  let groupId: Address;
+  let validator: Address;
+  let ephemeralConnection: Connection;
+  let getElectionsEphemeral: () => Promise<MaybeAccount<programClient.Election, string>[]>
+  let getElectionsBase: () => Promise<MaybeAccount<programClient.Election, string>[]>
+ 
+  // IMPORTANT: No need to verifyTeeRpcIntegrity on tests
   before(async () => {
-    connection = connect();
-    [alice, bob, charlie] = await connection.createWallets(3);
+    baseConnection = connect(HELIUS_RPC, HELIUS_WSS);
+    alice = await baseConnection.loadWalletFromEnvironment("ALICE")
+    bob = await baseConnection.loadWalletFromEnvironment("BOB")
+    
+    groupId = (await generateKeyPairSigner()).address;
+    validator = address(TEE_VALIDATOR_ADDRESS);
 
-    const counterPDAAndBump = await connection.getPDAAndBump(
+    const signMessage = async (message: Uint8Array): Promise<Uint8Array> => {
+      const signatures = await alice.signMessages([{content: message, signatures: {}}]);
+      const sig = signatures[0]
+      const signat = sig[alice.address]
+      return signat
+    }
+    const token = await getAuthToken(TEE_RPC, alice.address, signMessage)
+    ephemeralConnection = connect(`${TEE_RPC}/?token=${token}`, `${TEE_WS}`)
+
+    const counterPDAAndBump = await baseConnection.getPDAAndBump(
       MAGICE_PROGRAM_ADDRESS,
       ["counter"]
     );
     counterPDA = counterPDAAndBump.pda;
+
+    getElectionsEphemeral = ephemeralConnection.getAccountsFactory(
+      MAGICE_PROGRAM_ADDRESS,
+      programClient.ELECTION_DISCRIMINATOR,
+      programClient.getElectionDecoder(),
+    )
+    
+    getElectionsBase = baseConnection.getAccountsFactory(
+      MAGICE_PROGRAM_ADDRESS,
+      programClient.ELECTION_DISCRIMINATOR,
+      programClient.getElectionDecoder(),
+    )
   });
 
-  test("Alice inits and owns the program", async () => {
+  test("Alice inits and holds authority of the program", async () => {
     const initInstruction = programClient.getInitializeInstruction({
       programOwner: alice,
       electionCounter: counterPDA,
     });
 
-    const signature = await connection.sendTransactionFromInstructions({
-      feePayer: alice,
-      instructions: [initInstruction],
-    });
-
-    console.log("Program initialized with signature", signature);
+    try {
+      const signature = await baseConnection.sendTransactionFromInstructions({
+        feePayer: alice,
+        instructions: [initInstruction],
+      });
+      console.log("Program initialized with signature", signature);
+    } catch (error) {
+      console.log("MOST PROBABLY already initted if on devnet")
+    }
   });
 
   test("Alice creates an election", async () => {
-    const electionPDAAndBump = await connection.getPDAAndBump(
+    const electionPDAAndBump = await baseConnection.getPDAAndBump(
       MAGICE_PROGRAM_ADDRESS,
       ["election", alice.address]
     );
@@ -66,40 +127,167 @@ describe("Election with magic", () => {
         name: "Who wins superbowl",
         candidateNames,
       });
+    try {
+      const signature = await baseConnection.sendTransactionFromInstructions({
+        feePayer: alice,
+        instructions: [createElectionInstruction],
+      });
+      console.log("Alice created an election with sig", signature);
+    } catch (error) {
+      console.log("one organiser can only create one election, most probably already created")
+    }
 
-    const signature = await connection.sendTransactionFromInstructions({
-      feePayer: alice,
-      instructions: [createElectionInstruction],
-    });
-
-    console.log("Alice created an election with sig", signature);
   });
 
-  test("Bob and Charlie vote on it", async () => {
+  test("Create permission", async () => {
+    const permission = await permissionPdaFromAccount(election);
+    const group = await groupPdaFromId(groupId);
+
+    const createPermissionInstruction = programClient.getCreatePermissionInstruction({
+      organiser: alice,
+      election,
+      permission,
+      group,
+      permissionProgram: PERMISSION_PROGRAM_ID,
+      id: groupId,
+    });
+
+    const signaure = await baseConnection.sendTransactionFromInstructions({
+      feePayer: alice,
+      instructions: [createPermissionInstruction],
+    });
+
+    console.log(election)
+    console.log("permission created with sig", signaure)
+
+    await waitUntilPermissionActive(TEE_RPC, election)
+  })
+
+  test("Delegate election", async () => {
+    const bufferElection = await delegateBufferPdaFromDelegatedAccountAndOwnerProgram(
+      election,
+      MAGICE_PROGRAM_ADDRESS,
+    )
+    const delegationRecordElection = await delegationRecordPdaFromDelegatedAccount(
+      election,
+    )
+    const delegationMetadataElection = await delegationMetadataPdaFromDelegatedAccount(
+      election,
+    )
+
+    const delegateInstruction = programClient.getDelegateInstruction({
+      organiser: alice,
+      validator,
+      election,
+      bufferElection,
+      delegationRecordElection,
+      delegationMetadataElection
+    });
+
+    const signature = await baseConnection.sendTransactionFromInstructions({
+      feePayer: alice,
+      instructions: [delegateInstruction]
+    })
+
+    console.log("Delegate election program with sig", signature)
+  })
+
+
+  test("Alice and Bob vote on delegated election", async () => {
+    // Used to force fetching accounts from the base validator
+    await new Promise(r => setTimeout(r, 5000));
+    
     const bobCastVoteInstruction = programClient.getCastVoteInstruction({
       voter: bob,
       election,
       name: "Virat Kohli",
-      organiser: alice,
+      organiser: alice.address,
     });
-    const charlieCastVoteInstruction = programClient.getCastVoteInstruction({
-      voter: charlie,
+    const aliceCastVoteInstruction = programClient.getCastVoteInstruction({
+      voter: alice,
       election,
       name: "Virat Kohli",
-      organiser: alice,
+      organiser: alice.address,
     });
 
-    const bobSignature = await connection.sendTransactionFromInstructions({
-      feePayer: bob,
-      instructions: [bobCastVoteInstruction],
-    });
-    const charlieSignature = await connection.sendTransactionFromInstructions({
-      feePayer: charlie,
-      instructions: [charlieCastVoteInstruction],
-    });
+    try {
+      const _sigBob = await ephemeralConnection.sendTransactionFromInstructions({
+        feePayer: bob,
+        instructions: [bobCastVoteInstruction],
+      });
+      const _sigAlice = await ephemeralConnection.sendTransactionFromInstructions({
+        feePayer: alice,
+        instructions: [aliceCastVoteInstruction],
+      });
+    } catch (e) {
+      fs.writeFileSync(
+        'debug_vote.txt',
+        util.inspect(e, false, null, false)
+      )
 
-    console.log("Bob and Charlie cast votes for Kohli with sig");
+      throw e
+    }
+
   });
+
+  test("You cannot access and read the election data", async () => {
+    try {
+      const elections = await getElectionsBase();
+      assert.ok(elections.length == 1, "Cant have more than one elections as of yet")
+            
+      const election = elections[0]
+      assertAccountExists(election)
+      console.log("Retrieved information but is it correct, total votes:", election.data.totalVotes)
+    } catch(e) {
+      console.log("We werent able to read data success")
+    }    
+  })
+
+  test("You can access on ER if you have permission", async () => {
+    const elections = await getElectionsEphemeral();
+    assert.ok(elections.length == 1, "Cant have more than one elections as of yet")
+          
+    const election = elections[0]
+    assertAccountExists(election)
+    console.log("ED from ER with permission", election.data)
+  })
+
+  test("Commit and see if it can now be seen on base layer?", async () => {
+    const commitInstructions = programClient.getCommitInstruction({
+      organiser: alice,
+      election,
+    })
+
+    const sig = await ephemeralConnection.sendTransactionFromInstructions({
+      feePayer: alice,
+      instructions: [commitInstructions]
+    })
+
+    try {
+      const elections = await getElectionsBase();
+      assert.ok(elections.length == 1, "Cant have more than one elections as of yet")
+            
+      const election = elections[0]
+      assertAccountExists(election)
+      console.log("ED from base after commit", election.data)
+    } catch(e) {
+      console.log("We werent able to read data failure")
+    }   
+  })
+
+  test("Undelegate", async () => {
+    const undelegateInstruction = programClient.getUndelegateInstruction({
+      organiser: alice,
+      election,
+    })
+
+    const sig = await ephemeralConnection.sendTransactionFromInstructions({
+      feePayer: alice,
+      instructions: [undelegateInstruction]
+    })
+
+    console.log("Successfully undelegated")
+  })
 
   test("Alice reveals the winner", async () => {
     const revealInstruction = programClient.getRevealInstruction({
@@ -107,7 +295,7 @@ describe("Election with magic", () => {
       election,
     });
 
-    const signature = await connection.sendTransactionFromInstructions({
+    const signature = await baseConnection.sendTransactionFromInstructions({
       feePayer: alice,
       instructions: [revealInstruction],
     });

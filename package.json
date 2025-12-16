@@ -5,8 +5,12 @@
     "lint": "prettier */*{.js,.ts} \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.6.5",
     "@magicblock-labs/ephemeral-rollups-sdk": "^0.6.5",
-    "@solana/kit": "^5.0.0",
+    "@solana/kit": "^4.0.0",
+    "@solana/web3.js": "^1.98.4",
+    "dotenv": "^17.2.3",
     "solana-kite": "^1.8.0",
     "ws": "^8.18.3"
   },

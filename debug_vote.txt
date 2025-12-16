@@ -1,0 +1,74 @@
+SolanaError: WebSocket failed to connect
+    at WebSocket.handleError (/home/nitishc/progmag/magic-elect/node_modules/@solana/rpc-subscriptions-channel-websocket/src/websocket-channel.ts:102:42)
+    at [nodejs.internal.kHybridDispatch] (node:internal/event_target:827:20)
+    at WebSocket.dispatchEvent (node:internal/event_target:762:26)
+    at fireEvent (node:internal/deps/undici/undici:11663:14)
+    at failWebsocketConnection (node:internal/deps/undici/undici:11744:9)
+    at Object.processResponse (node:internal/deps/undici/undici:11958:13)
+    at node:internal/deps/undici/undici:10735:23
+    at node:internal/process/task_queues:151:7
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at AsyncResource.runMicrotask (node:internal/process/task_queues:148:8) {
+  cause: undefined,
+  context: {
+    errorEvent: ErrorEvent {
+      type: 'error',
+      defaultPrevented: false,
+      cancelable: false,
+      timeStamp: 38482.957525
+    },
+    __code: 8190004
+  },
+  transaction: {
+    slot: 20193330n,
+    transaction: {
+      signatures: [
+        '456N927QfVm13TBFNXGTx8ryhfzyu46yr2rpMQv1ew88FGjPmMAVhMKB9X8YNr5oN1exNUXfq3en7NtD64nguwVp'
+      ],
+      message: {
+        header: {
+          numRequiredSignatures: 1,
+          numReadonlySignedAccounts: 0,
+          numReadonlyUnsignedAccounts: 2
+        },
+        accountKeys: [
+          'ByJoETvaWnpgWKqkTWiaaRAxHUAKz4z23A2pSM8Q6diY',
+          'BVrEFJ6BXdauorf3RQU65hjK4NMVNTLQtBC4crSMjrTx',
+          '6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs',
+          'jteXU4WKiXS6ghvSfighVi272uCGYTeiPsY3Vhen35K'
+        ],
+        recentBlockhash: '9vsQiCHAz7JtNRcKoemwWDSGgu3BJQHqf9gFnN3pGyUm',
+        instructions: [
+          {
+            programIdIndex: 2,
+            accounts: [ 0, 1, 3 ],
+            data: 'RxBT8jXUEEqQAkXAEFKMCrFdpm4jja8',
+            stackHeight: null
+          }
+        ],
+        addressTableLookups: []
+      }
+    },
+    meta: {
+      err: null,
+      status: { Ok: null },
+      fee: 0n,
+      preBalances: [ 4999950000n, 4628400n, 2733386880n, 2250091706n ],
+      postBalances: [ 4999950000n, 4628400n, 2733386880n, 2250091706n ],
+      innerInstructions: [],
+      logMessages: [
+        'Program 6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs invoke [1]',
+        'Program log: Instruction: CastVote',
+        'Program 6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs consumed 7653 of 200000 compute units',
+        'Program 6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs success'
+      ],
+      preTokenBalances: [],
+      postTokenBalances: [],
+      rewards: [],
+      loadedAddresses: { writable: [], readonly: [] },
+      computeUnitsConsumed: 7653n
+    },
+    version: 0n,
+    blockTime: 1765888903n
+  }
+}
