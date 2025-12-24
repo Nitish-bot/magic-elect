@@ -2,7 +2,8 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*{.js,.ts} \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*{.js,.ts} \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*{.js,.ts} \"*/**/*{.js,.ts}\" --check",
+    "test": "yarn tsx --test --test-reporter=spec tests/*.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

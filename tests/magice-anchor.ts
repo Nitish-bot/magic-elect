@@ -51,7 +51,7 @@ describe("Election with magic", () => {
   let bob: Keypair;
   let counterPDA: PublicKey;
   let electionPDA: PublicKey;
-  
+
   // Ephemeral connection/program
   let ephemeralProvider: anchor.AnchorProvider;
   let ephemeralProgram: Program<Magice>;
@@ -65,9 +65,17 @@ describe("Election with magic", () => {
     bob = loadKeypair("BOB");
 
     // Airdrop if on localnet/devnet and wallets are empty
-    if ((await provider.connection.getBalance(alice.publicKey)) < LAMPORTS_PER_SOL) {
-        await provider.connection.requestAirdrop(alice.publicKey, 2 * LAMPORTS_PER_SOL);
-        await provider.connection.requestAirdrop(bob.publicKey, 2 * LAMPORTS_PER_SOL);
+    if (
+      (await provider.connection.getBalance(alice.publicKey)) < LAMPORTS_PER_SOL
+    ) {
+      await provider.connection.requestAirdrop(
+        alice.publicKey,
+        2 * LAMPORTS_PER_SOL
+      );
+      await provider.connection.requestAirdrop(
+        bob.publicKey,
+        2 * LAMPORTS_PER_SOL
+      );
     }
 
     groupId = Keypair.generate().publicKey;
@@ -79,7 +87,7 @@ describe("Election with magic", () => {
     };
 
     const token = await getAuthToken(TEE_RPC, alice.publicKey, signMessage);
-    
+
     // Create connection to TEE with Auth Token
     const ephemeralConnection = new Connection(`${TEE_RPC}/?token=${token}`, {
       wsEndpoint: TEE_WS,
@@ -115,7 +123,7 @@ describe("Election with magic", () => {
         .accounts({
           programOwner: alice.publicKey,
           electionCounter: counterPDA,
-        //   systemProgram: anchor.web3.SystemProgram.programId, // Anchor usually infers this
+          //   systemProgram: anchor.web3.SystemProgram.programId, // Anchor usually infers this
         })
         .signers([alice])
         .rpc();
@@ -127,7 +135,7 @@ describe("Election with magic", () => {
 
   it("Alice creates an election", async () => {
     const candidateNames = ["Virat Kohli", "Rohit Sharma"];
-    
+
     // Derive Election PDA
     [electionPDA] = PublicKey.findProgramAddressSync(
       [Buffer.from("election"), alice.publicKey.toBuffer()],
@@ -180,12 +188,10 @@ describe("Election with magic", () => {
       electionPDA,
       program.programId
     );
-    const delegationRecordElection = delegationRecordPdaFromDelegatedAccount(
-      electionPDA
-    );
-    const delegationMetadataElection = delegationMetadataPdaFromDelegatedAccount(
-      electionPDA
-    );
+    const delegationRecordElection =
+      delegationRecordPdaFromDelegatedAccount(electionPDA);
+    const delegationMetadataElection =
+      delegationMetadataPdaFromDelegatedAccount(electionPDA);
 
     const tx = await program.methods
       .delegate()
@@ -209,31 +215,30 @@ describe("Election with magic", () => {
     await new Promise((r) => setTimeout(r, 5000));
 
     try {
-        // Bob votes
-        // Note: We use the ephemeralProgram here
-        const txBob = await ephemeralProgram.methods
-            .castVote("Virat Kohli", alice.publicKey) // Arguments match instruction args
-            .accounts({
-                voter: bob.publicKey,
-                election: electionPDA,
-            })
-            .signers([bob]) // Bob must sign
-            .rpc();
-        
-        console.log("Bob voted on ephemeral:", txBob);
+      // Bob votes
+      // Note: We use the ephemeralProgram here
+      const txBob = await ephemeralProgram.methods
+        .castVote("Virat Kohli", alice.publicKey) // Arguments match instruction args
+        .accounts({
+          voter: bob.publicKey,
+          election: electionPDA,
+        })
+        .signers([bob]) // Bob must sign
+        .rpc();
 
-        // Alice votes
-        const txAlice = await ephemeralProgram.methods
-            .castVote("Virat Kohli", alice.publicKey)
-            .accounts({
-                voter: alice.publicKey,
-                election: electionPDA,
-            })
-            .signers([alice])
-            .rpc();
+      console.log("Bob voted on ephemeral:", txBob);
 
-        console.log("Alice voted on ephemeral:", txAlice);
+      // Alice votes
+      const txAlice = await ephemeralProgram.methods
+        .castVote("Virat Kohli", alice.publicKey)
+        .accounts({
+          voter: alice.publicKey,
+          election: electionPDA,
+        })
+        .signers([alice])
+        .rpc();
 
+      console.log("Alice voted on ephemeral:", txAlice);
     } catch (e) {
       console.error("Voting failed:", e);
       throw e;
@@ -242,18 +247,25 @@ describe("Election with magic", () => {
 
   it("You cannot access and read the election data on Base Layer", async () => {
     try {
-        // Fetch using base provider
-        const electionAccount = await program.account.election.fetch(electionPDA);
-        console.log("Retrieved base info (should be stale or empty):", electionAccount.totalVotes.toString());
-        // Depending on your logic, you might want to assert failure here if the account is closed/moved
+      // Fetch using base provider
+      const electionAccount = await program.account.election.fetch(electionPDA);
+      console.log(
+        "Retrieved base info (should be stale or empty):",
+        electionAccount.totalVotes.toString()
+      );
+      // Depending on your logic, you might want to assert failure here if the account is closed/moved
     } catch (e) {
-        console.log("We werent able to read data on base (Expected if strictly delegated)");
+      console.log(
+        "We werent able to read data on base (Expected if strictly delegated)"
+      );
     }
   });
 
   it("You can access on ER if you have permission", async () => {
     // Fetch using ephemeral program instance
-    const electionAccount = await ephemeralProgram.account.election.fetch(electionPDA);
+    const electionAccount = await ephemeralProgram.account.election.fetch(
+      electionPDA
+    );
     assert.ok(electionAccount, "Account should exist on ER");
     console.log("ED from ER with permission:", electionAccount);
   });
@@ -261,39 +273,39 @@ describe("Election with magic", () => {
   it("Commit and see if it can now be seen on base layer", async () => {
     // Commit must be sent to Ephemeral chain (usually) to trigger the state diff propagation
     // Check your specific MR/ER logic. Usually, `commit` is an instruction on the ER that pushes state down.
-    
+
     const tx = await ephemeralProgram.methods
-        .commit()
-        .accounts({
-            organiser: alice.publicKey,
-            election: electionPDA,
-        })
-        .signers([alice])
-        .rpc();
-    
+      .commit()
+      .accounts({
+        organiser: alice.publicKey,
+        election: electionPDA,
+      })
+      .signers([alice])
+      .rpc();
+
     console.log("Committed with sig:", tx);
 
     // Give it a moment to settle on Base
     await new Promise((r) => setTimeout(r, 2000));
 
     try {
-        const electionAccount = await program.account.election.fetch(electionPDA);
-        console.log("ED from base after commit:", electionAccount);
+      const electionAccount = await program.account.election.fetch(electionPDA);
+      console.log("ED from base after commit:", electionAccount);
     } catch (e) {
-        console.log("Failed to read data on base after commit");
+      console.log("Failed to read data on base after commit");
     }
   });
 
   it("Undelegate", async () => {
     // Undelegate is usually called on the EPHEMERAL chain to close the session
     const tx = await ephemeralProgram.methods
-        .undelegate()
-        .accounts({
-            organiser: alice.publicKey,
-            election: electionPDA,
-        })
-        .signers([alice])
-        .rpc();
+      .undelegate()
+      .accounts({
+        organiser: alice.publicKey,
+        election: electionPDA,
+      })
+      .signers([alice])
+      .rpc();
 
     console.log("Successfully undelegated with sig:", tx);
   });
@@ -301,13 +313,13 @@ describe("Election with magic", () => {
   it("Alice reveals the winner", async () => {
     // Back on Base layer
     const tx = await program.methods
-        .reveal()
-        .accounts({
-            organiser: alice.publicKey,
-            election: electionPDA,
-        })
-        .signers([alice])
-        .rpc();
+      .reveal()
+      .accounts({
+        organiser: alice.publicKey,
+        election: electionPDA,
+      })
+      .signers([alice])
+      .rpc();
 
     console.log("Alice reveals winner with sig", tx);
   });

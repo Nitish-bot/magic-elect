@@ -14,7 +14,7 @@ mod state;
 use handlers::*;
 use state::Election;
 
-declare_id!("6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs");
+declare_id!("3Ryvt17ad5gokTNiutNBkqKBH5LqJk7onNs1s8TSB9eN");
 
 #[ephemeral]
 #[program]

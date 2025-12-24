@@ -15,33 +15,32 @@ SolanaError: WebSocket failed to connect
       type: 'error',
       defaultPrevented: false,
       cancelable: false,
-      timeStamp: 38482.957525
+      timeStamp: 26169.273481
     },
     __code: 8190004
   },
   transaction: {
-    slot: 20193330n,
+    slot: 33239172n,
     transaction: {
       signatures: [
-        '456N927QfVm13TBFNXGTx8ryhfzyu46yr2rpMQv1ew88FGjPmMAVhMKB9X8YNr5oN1exNUXfq3en7NtD64nguwVp'
+        '5ExwaWCLFGtdE8mzDk1eegYhtrc636kDoMogj1oJW5tTMJdupXw8noiXsNca7HL7zzee11gWuNwZbgvmJzM1vapo'
       ],
       message: {
         header: {
           numRequiredSignatures: 1,
           numReadonlySignedAccounts: 0,
-          numReadonlyUnsignedAccounts: 2
+          numReadonlyUnsignedAccounts: 1
         },
         accountKeys: [
-          'ByJoETvaWnpgWKqkTWiaaRAxHUAKz4z23A2pSM8Q6diY',
-          'BVrEFJ6BXdauorf3RQU65hjK4NMVNTLQtBC4crSMjrTx',
-          '6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs',
-          'jteXU4WKiXS6ghvSfighVi272uCGYTeiPsY3Vhen35K'
+          'jteXU4WKiXS6ghvSfighVi272uCGYTeiPsY3Vhen35K',
+          '4dRd6A5ZnDrZkaTsPh8iZEkn3E7QDvuPTiH6BVcUnPtV',
+          '3Ryvt17ad5gokTNiutNBkqKBH5LqJk7onNs1s8TSB9eN'
         ],
-        recentBlockhash: '9vsQiCHAz7JtNRcKoemwWDSGgu3BJQHqf9gFnN3pGyUm',
+        recentBlockhash: 'BkysrRfA7ZyLmKLmbr6fg7ZKtrSNvConaJ5r9YbrBnK2',
         instructions: [
           {
             programIdIndex: 2,
-            accounts: [ 0, 1, 3 ],
+            accounts: [ 0, 1, 0 ],
             data: 'RxBT8jXUEEqQAkXAEFKMCrFdpm4jja8',
             stackHeight: null
           }
@@ -53,22 +52,22 @@ SolanaError: WebSocket failed to connect
       err: null,
       status: { Ok: null },
       fee: 0n,
-      preBalances: [ 4999950000n, 4628400n, 2733386880n, 2250091706n ],
-      postBalances: [ 4999950000n, 4628400n, 2733386880n, 2250091706n ],
+      preBalances: [ 2237111170n, 4628400n, 2733386880n ],
+      postBalances: [ 2237111170n, 4628400n, 2733386880n ],
       innerInstructions: [],
       logMessages: [
-        'Program 6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs invoke [1]',
+        'Program 3Ryvt17ad5gokTNiutNBkqKBH5LqJk7onNs1s8TSB9eN invoke [1]',
         'Program log: Instruction: CastVote',
-        'Program 6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs consumed 7653 of 200000 compute units',
-        'Program 6bQk3gRYVTWG9rKXKcK9Qnj3a9kozXsAWgMixFXt1yKs success'
+        'Program 3Ryvt17ad5gokTNiutNBkqKBH5LqJk7onNs1s8TSB9eN consumed 7470 of 200000 compute units',
+        'Program 3Ryvt17ad5gokTNiutNBkqKBH5LqJk7onNs1s8TSB9eN success'
       ],
       preTokenBalances: [],
       postTokenBalances: [],
       rewards: [],
       loadedAddresses: { writable: [], readonly: [] },
-      computeUnitsConsumed: 7653n
+      computeUnitsConsumed: 7470n
     },
     version: 0n,
-    blockTime: 1765888903n
+    blockTime: 1766557115n
   }
 }
